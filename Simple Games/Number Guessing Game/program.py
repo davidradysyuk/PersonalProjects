@@ -29,4 +29,6 @@ while chances < math.log(higher - lower + 1, 2):
         print('Nope, that number is too low.')
 
 if amount <= chances:
-    print('You have ran out of guesses. the correct number was', numb, 'Better luck next time! ')
+    print('You have ran out of guesses. the correct number was', numb, ',Better luck next time! ')
+else:
+    pass
