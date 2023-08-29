@@ -14,7 +14,8 @@ soup = BeautifulSoup(page.content, "html.parser")
 
 results = soup.find(id='ResultsContainer')
 
-job_elements = results.find_all("div", class_="card-content")
+print (results)
+job_elements = results.find_all ("div", class_="card-content")
 
 manager_jobs = results.find_all("h2", string=lambda text: position in text.lower())
 
