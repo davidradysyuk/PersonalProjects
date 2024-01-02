@@ -1,6 +1,5 @@
 import wikipedia
 
-
 def get_random_article():
     while True:
         # Get a random article title
