@@ -1,11 +1,16 @@
 import customtkinter as ctk
 from tkcalendar import Calendar
 import mysql.connector
+import datetime
+
 
 window = ctk.CTk()
 window.title("Atlas: Your Gateway to the World")
 window.geometry('920x570')
 
+def clear_flight_buttons():
+    for widget in right_frame.winfo_children():
+        widget.destroy()
 
 def format_date(date_str):
     """Convert date from m/d/yy to yyyy-mm-dd format."""
@@ -33,8 +38,8 @@ def format_flight_info(flight):
 def show_flight_info(flight_info):
     flight_data = flight_info.split(', ')
     flight_number = flight_data[1].split(': ')[1]
-    dep_city = flight_data[2].split(': ')[1]  # Extracting departure city
-    arrival_city = flight_data[3].split(': ')[1]  # Extracting arrival city
+    dep_city = flight_data[2].split(': ')[1]
+    arrival_city = flight_data[3].split(': ')[1]
     departure_date = flight_data[4].split(': ')[1]
     return_date = flight_data[5].split(': ')[1]
     available_seats = flight_data[6].split(': ')[1]
@@ -42,6 +47,8 @@ def show_flight_info(flight_info):
     dep_from_dest_time = flight_data[11].split(': ')[1]
     arrival_to_dest_time = flight_data[12].split(': ')[1]
     arrival_to_origin_time = flight_data[13].split(': ')[1]
+    flight_id = flight_info.split(', ')[0].split(': ')[1]
+    ticket_price = float(flight_info.split(', ')[7].split(': ')[1].replace('$', ''))
 
     info_text = (
         f"Your flight number is {flight_number},\n"
@@ -61,7 +68,7 @@ def show_flight_info(flight_info):
     flight_textbox.insert("0.0", info_text)
     flight_textbox.configure(state="disabled")
 
-    def book_ticket():
+    def book_ticket(flight_id, ticket_price):
         booking_window = ctk.CTkToplevel(window)
         booking_window.title("Booking Details")
         booking_window.geometry("300x300")
@@ -87,26 +94,79 @@ def show_flight_info(flight_info):
         entry_phone = ctk.CTkEntry(booking_window)
         entry_phone.pack()
 
-        def confirm_booking():
+        def confirm():
             # Extract user input
-            first_name = entry_first_name.get()
-            last_name = entry_last_name.get()
-            email = entry_email.get()
-            phone = entry_phone.get()
+            first_name = entry_first_name.get().strip()
+            last_name = entry_last_name.get().strip()
+            email = entry_email.get().strip()
+            phone = entry_phone.get().strip()
 
-            # Add logic to validate and store the input data
+            # Validate the input
+            if not first_name or not last_name or not email or not phone:
+                print("Please fill in all fields")
+                return
 
-            print("Booking Confirmed")  # Placeholder for confirmation logic
+            # Connect to the database
+            connection = connect_to_database()
+            if connection is None:
+                return
+
+            try:
+                cursor = connection.cursor()
+
+                # Insert passenger details
+                insert_passenger_query = """
+                    INSERT INTO passengers (first_name, last_name, email, phone_number) 
+                    VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(insert_passenger_query, (first_name, last_name, email, phone))
+                connection.commit()
+
+                # Retrieve the passenger_id
+                passenger_id = cursor.lastrowid
+
+                # Set booking date to today and seat number to 1
+                booking_date = datetime.date.today().isoformat()
+                seat_number = 1
+
+                # Insert booking details
+                insert_booking_query = """
+                    INSERT INTO bookings (flight_id, passenger_id, booking_date, seat_number, total_price) 
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                cursor.execute(insert_booking_query, (flight_id, passenger_id, booking_date, seat_number, ticket_price))
+                connection.commit()
+
+                # Update available seats in flights table
+                update_seats_query = """
+                    UPDATE flights SET available_seats = available_seats - 1 
+                    WHERE flight_id = %s AND available_seats > 0
+                """
+                cursor.execute(update_seats_query, (flight_id,))
+                connection.commit()
+
+                print("Booking Confirmed. Available seats updated.")
+
+            except mysql.connector.Error as error:
+                print("Error in booking:", error)
+
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
             booking_window.destroy()
 
-        done_button = ctk.CTkButton(booking_window, text="Done", command=confirm_booking)
+        done_button = ctk.CTkButton(booking_window, text="Done", command=confirm)
         done_button.pack(pady=10)
+
+        # Modify the call to book_ticket to include flight_id and ticket_price
+
+    yes_button = ctk.CTkButton(window, text="Yes", command=lambda: book_ticket(flight_id, ticket_price))
+    yes_button.grid(row=1, column=0, padx=10, sticky="w")
 
     def cancel_booking():
         window.destroy()
-
-    yes_button = ctk.CTkButton(window, text="Yes", command=book_ticket)
-    yes_button.grid(row=1, column=0, padx=10, sticky="w")
 
     no_button = ctk.CTkButton(window, text="No", command=cancel_booking)
     no_button.grid(row=1, column=0, padx=10, sticky="e")
@@ -239,6 +299,10 @@ ret_calendar.grid(row=7, column=0, sticky="w", padx=(150, 0))
 
 button = ctk.CTkButton(left_frame, text="View available flights", command=get_user_selection)
 button.grid(row=8, column=0, sticky="w", padx=(192, 0), pady=(20, 0))
+
+clear_button = ctk.CTkButton(left_frame, text="Clear Flights", command=clear_flight_buttons)
+clear_button.grid(row=9, column=0, sticky="w", padx=(192, 0), pady=(10, 0))
+
 
 # Create and place the vertical dividing line
 vertical_line = ctk.CTkFrame(window, width=2, height=570, fg_color="gray")
